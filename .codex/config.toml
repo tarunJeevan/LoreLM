@@ -1,0 +1,52 @@
+
+################################################################################
+# Approval & Sandbox
+################################################################################
+
+# When to ask for command approval:
+# - untrusted: only known-safe read-only commands auto-run; others prompt
+# - on-request: model decides when to ask (default)
+# - never: never prompt (risky)
+# - { granular = { ... } }: allow or auto-reject selected prompt categories
+
+approval_policy = "on-request"
+
+# Who reviews eligible approval prompts: user (default) | auto_review
+# approvals_reviewer = "user"
+
+# Example granular policy:
+# approval_policy = { granular = {
+# sandbox_approval = true,
+# rules = true,
+# mcp_elicitations = true,
+# request_permissions = false,
+# skill_approval = false
+# } }
+
+# Allow login-shell semantics for shell-based tools when they request `login = true`.
+# Default: true. Set false to force non-login shells and reject explicit login-shell requests.
+allow_login_shell = true
+
+# Filesystem/network sandbox policy for tool calls:
+# - read-only (default)
+# - workspace-write
+# - danger-full-access (no sandbox; extremely risky)
+sandbox_mode = "workspace-write"
+
+# Named permissions profile to apply by default. Built-ins:
+# :read-only | :workspace | :danger-full-access
+# Use a custom name such as "workspace" only when you also define [permissions.workspace].
+# default_permissions = ":workspace"
+
+################################################################################
+# Project Documentation Controls
+################################################################################
+
+# Max bytes from AGENTS.md to embed into first-turn instructions. Default: 32768
+project_doc_max_bytes = 65536
+
+# Ordered fallbacks when AGENTS.md is missing at a directory level. Default: []
+project_doc_fallback_filenames = []
+
+# Project root marker filenames used when searching parent directories. Default: [".git"]
+# project_root_markers = [".git"]
