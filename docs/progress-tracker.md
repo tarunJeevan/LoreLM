@@ -2,25 +2,27 @@
 
 ## Current Status
 
-**Phase:** 0 — Pre-implementation
-**Goal:** Project is in the planning and documentation stage. No code has been written yet.
+**Phase:** 1 — Minimal Local Inference
+**Goal:** Phase 0 skeleton is implemented. The next work is the minimal local inference vertical slice.
 
 ---
 
 ## Completion Checklist
 
 ### Phase 0 — Skeleton App
-- [ ] Cargo workspace initialized with all crates stubbed
-- [ ] Domain IDs and placeholder types defined in `core`
-- [ ] `AppEvent`, `Command`, `AppState` and sub-state structs defined in `core`
-- [ ] `ratatui` main loop implemented in `app-tui`
-- [ ] `app` coordinator skeleton: channel wiring and event dispatch loop
-- [ ] `storage`: SQLite creation, migrations, XDG path resolution
-- [ ] Config loading from `config.toml`
-- [ ] Structured logging wired up
-- [ ] Stub message persistence and history reload
+- [x] Cargo workspace initialized with all crates stubbed
+- [x] Domain IDs and placeholder types defined in `core`
+- [x] `AppEvent`, `Command`, `AppState` and sub-state structs defined in `core`
+- [x] `ratatui` main loop implemented in `app-tui`
+- [x] `app` coordinator skeleton: channel wiring and event dispatch loop
+- [x] `storage`: SQLite creation, migrations, XDG path resolution
+- [x] Config loading from `config.toml`
+- [x] Structured logging wired up
+- [x] Stub message persistence and history reload
 
 **Deliverable:** TUI opens, accepts typed prompts, stores stub messages in SQLite, reloads history after restart.
+
+**Note:** Phase 0 creates the regular SQLite schema tables and the FTS5 table. The `sqlite-vec` virtual table is deferred until Phase 4 when the vector extension is introduced.
 
 ---
 
@@ -140,4 +142,4 @@ No decisions recorded yet. This section will track decisions made during impleme
 
 ---
 
-*Last updated: pre-implementation*
+*Last updated: Phase 0 complete*
