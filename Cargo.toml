@@ -1,0 +1,35 @@
+[workspace]
+members = [
+    "app",
+    "crates/app-tui",
+    "crates/core",
+    "crates/doc-ingest",
+    "crates/embeddings",
+    "crates/inference",
+    "crates/llama-backend",
+    "crates/model-manager",
+    "crates/retrieval",
+    "crates/storage",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+version = "0.1.0"
+
+[workspace.dependencies]
+anyhow = "1"
+crossterm = "0.28"
+directories = "5"
+ratatui = "0.29"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+thiserror = "1"
+time = { version = "0.3", features = ["formatting"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+toml = "0.8"
+tracing = "0.1"
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+uuid = { version = "1", features = ["serde", "v4"] }
