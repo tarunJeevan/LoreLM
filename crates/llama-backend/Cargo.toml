@@ -1,0 +1,10 @@
+[package]
+name = "llama-backend"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+inference = { path = "../inference" }
+lorelm-core = { path = "../core" }
+thiserror.workspace = true

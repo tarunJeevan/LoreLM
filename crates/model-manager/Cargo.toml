@@ -1,0 +1,10 @@
+[package]
+name = "model-manager"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+lorelm-core = { path = "../core" }
+storage = { path = "../storage" }
+thiserror.workspace = true

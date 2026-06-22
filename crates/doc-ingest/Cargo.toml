@@ -1,0 +1,9 @@
+[package]
+name = "doc-ingest"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+lorelm-core = { path = "../core" }
+thiserror.workspace = true
