@@ -27,6 +27,7 @@
 ---
 
 ### Phase 1 — Minimal Local Inference
+- [ ] Apply optimizations and changes listed in `docs/phase-0-notes.md`
 - [ ] `InferenceBackend` trait and related types defined in `inference`
 - [ ] `ResourcePlanner` implemented (startup + load-time lifecycle)
 - [ ] Persistent inference worker thread implemented in `app`
@@ -139,6 +140,13 @@ No decisions recorded yet. This section will track decisions made during impleme
 - **Decision:** What was decided
 - **Replaces:** What it contradicts or changes
 - **Reason:** Why the original decision was altered
+
+### Decision 1 - Update Workspace Rust Edition
+
+- **Date:** 06-21-2026
+- **Decision:** Updated the workspace rust edition from 2021 to 2024.
+- **Replaces:** It introduces 1 or 2 warnings about certain values being dropped earlier or later due to the edition change.
+- **Reason:** There was no reason for sticking to the 2021 edition. Updating to the latest edition is more forward-facing as many third-party crates do the same, potentially introducing instabilities from dependencies.
 
 ---
 

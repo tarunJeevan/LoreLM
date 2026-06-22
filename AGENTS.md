@@ -18,7 +18,7 @@ Read the relevant supporting document in the `docs/` directory before changing c
 
 Before starting implementation work:
 
-1. Read `progress-tracker.md` to determine the current phase and relevant unchecked work.
+1. Read `progress-tracker.md` to determine the current phase, relevant unchecked work, and architectural decisions.
 2. Read `implementation-plan.md` for phase boundaries and deliverables.
 3. Read the supporting docs needed for that task.
 4. State any uncertainties regarding the task. Do not assume or hide confusion.
