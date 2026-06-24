@@ -5,13 +5,13 @@ mod paths;
 pub use paths::AppPaths;
 
 use lorelm_core::{
-    AppState, ContextPolicy, Conversation, ConversationId, ConversationState, DocumentPanelState,
-    GenerationConfig, GenerationState, Message, MessageRole, MessageStatus, ModeDefinition, ModeId,
-    ModelPanelState, RetrievalPolicy, UiState, Workspace, WorkspaceId, WorkspaceState,
+    AppState, Conversation, ConversationId, ConversationState, DocumentPanelState, GenerationState,
+    Message, MessageRole, MessageStatus, ModeDefinition, ModeId, ModelId, ModelPanelState, UiState,
+    Workspace, WorkspaceId, WorkspaceState,
 };
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
-use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 /// Storage-layer error.
 #[derive(Debug, thiserror::Error)]
@@ -61,6 +61,7 @@ impl Default for AppConfig {
         Self {
             paths: PathConfig {
                 model_dirs: vec!["~/.models".to_owned()],
+                model_path: None,
             },
             ui: UiConfig {
                 theme: "default".to_owned(),
@@ -106,6 +107,9 @@ impl Default for AppConfig {
 pub struct PathConfig {
     /// Directories scanned for models.
     pub model_dirs: Vec<String>,
+    /// Optional Phase 1 model path used before model scanning exists.
+    #[serde(default)]
+    pub model_path: Option<String>,
 }
 
 /// UI configuration.
@@ -282,6 +286,7 @@ impl Storage {
         workspace_id: &WorkspaceId,
         conversation_id: &ConversationId,
         _config: AppConfig,
+        available_ram_bytes: u64,
     ) -> Result<AppState> {
         let workspace = self.load_workspace(workspace_id)?;
         let conversation = self.load_conversation(conversation_id)?;
@@ -294,31 +299,15 @@ impl Storage {
             conversation: ConversationState {
                 active_conversation: Some(conversation),
                 messages,
+                streaming_response: None,
                 scroll_offset: 0,
             },
             documents: DocumentPanelState::default(),
             models: ModelPanelState::default(),
             generation: GenerationState::Idle,
-            active_mode: ModeDefinition {
-                id: ModeId::named("freeform"),
-                name: "Freeform".to_owned(),
-                description: "No retrieval, no constraints.".to_owned(),
-                system_prompt: "You are a local writing assistant.".to_owned(),
-                retrieval_policy: RetrievalPolicy::None,
-                require_sources: false,
-                generation: GenerationConfig {
-                    temperature: 0.7,
-                    top_p: 0.9,
-                    repeat_penalty: 1.1,
-                    max_tokens: 512,
-                },
-                context: ContextPolicy {
-                    include_recent_messages: true,
-                    max_recent_messages: 8,
-                },
-            },
+            active_mode: ModeDefinition::freeform(),
             ui: UiState::default(),
-            available_ram_bytes: 0,
+            available_ram_bytes,
         })
     }
 
@@ -438,7 +427,10 @@ impl Storage {
                 sequence: row.get(2)?,
                 role: parse_role(&role, 3)?,
                 content: row.get(4)?,
-                model_id: None,
+                model_id: row
+                    .get::<_, Option<String>>(5)?
+                    .map(parse_model_id)
+                    .transpose()?,
                 mode_id: row.get::<_, Option<String>>(6)?.map(ModeId::named),
                 status: parse_status(&status, 7)?,
                 token_count: row.get(8)?,
@@ -463,6 +455,10 @@ where
             Box::new(error),
         )
     })
+}
+
+fn parse_model_id(value: String) -> rusqlite::Result<ModelId> {
+    parse_id(value, 5)
 }
 
 fn parse_role(value: &str, index: usize) -> rusqlite::Result<MessageRole> {
@@ -665,7 +661,12 @@ mod tests {
 
         let storage = Storage::open(&paths).expect("storage reopens");
         let state = storage
-            .load_app_state(&bootstrap.workspace_id, &bootstrap.conversation_id, config)
+            .load_app_state(
+                &bootstrap.workspace_id,
+                &bootstrap.conversation_id,
+                config,
+                0,
+            )
             .expect("state reloads");
 
         assert_eq!(state.conversation.messages.len(), 1);

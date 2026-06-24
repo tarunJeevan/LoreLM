@@ -6,16 +6,16 @@ use anyhow::Context;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use lorelm_core::{AppEvent, AppState, Command, GenerationState, MessageRole, Panel};
 use ratatui::{
+    Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
-    Terminal,
 };
 use tokio::sync::mpsc;
 
@@ -36,12 +36,11 @@ pub async fn run(
 
         terminal.draw(|frame| render(frame, &state, &prompt))?;
 
-        if event::poll(Duration::from_millis(50)).context("failed to poll terminal events")? {
-            if let Event::Key(key) = event::read().context("failed to read terminal event")? {
-                if handle_key(key, &mut prompt, &mut state, &command_tx).await? {
-                    break;
-                }
-            }
+        if event::poll(Duration::from_millis(50)).context("failed to poll terminal events")?
+            && let Event::Key(key) = event::read().context("failed to read terminal event")?
+            && handle_key(key, &mut prompt, &mut state, &command_tx).await?
+        {
+            break;
         }
     }
 
@@ -52,20 +51,33 @@ fn apply_event(state: &mut AppState, event: AppEvent) {
     match event {
         AppEvent::MessageAppended(message) => {
             state.conversation.messages.push(message);
+        }
+        AppEvent::GenerationCancelled => {
+            state.conversation.streaming_response = None;
             state.generation = GenerationState::Idle;
         }
-        AppEvent::GenerationCancelled => state.generation = GenerationState::Idle,
         AppEvent::Error(error) => {
+            state.conversation.streaming_response = None;
             state.generation = GenerationState::Failed(error.message.clone());
             state.ui.error = Some(error);
+        }
+        AppEvent::TokenDelta(delta) => {
+            let response = state
+                .conversation
+                .streaming_response
+                .get_or_insert_with(String::new);
+            response.push_str(&delta);
+            state.generation = GenerationState::Generating;
+        }
+        AppEvent::GenerationFinished(_) => {
+            state.conversation.streaming_response = None;
+            state.generation = GenerationState::Idle;
         }
         AppEvent::Tick
         | AppEvent::DocumentImportProgress(_)
         | AppEvent::ModelDownloadProgress(_)
         | AppEvent::ModelLoaded(_)
-        | AppEvent::RetrievalFinished(_)
-        | AppEvent::TokenDelta(_)
-        | AppEvent::GenerationFinished(_) => {}
+        | AppEvent::RetrievalFinished(_) => {}
     }
 }
 
@@ -75,17 +87,27 @@ async fn handle_key(
     state: &mut AppState,
     command_tx: &mpsc::Sender<Command>,
 ) -> anyhow::Result<bool> {
+    let prompt_editable = matches!(
+        state.generation,
+        GenerationState::Idle | GenerationState::Failed(_)
+    );
+
     match (key.code, key.modifiers) {
         (KeyCode::Char('q'), KeyModifiers::CONTROL) => {
             let _ = command_tx.send(Command::Quit).await;
             return Ok(true);
         }
         (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
-            let _ = command_tx.send(Command::CancelGeneration).await;
+            if matches!(state.generation, GenerationState::Generating) {
+                state.generation = GenerationState::Cancelling;
+                let _ = command_tx.send(Command::CancelGeneration).await;
+            }
         }
-        (KeyCode::Enter, KeyModifiers::ALT) => prompt.push('\n'),
+        (KeyCode::Enter, KeyModifiers::SHIFT) if prompt_editable => {
+            prompt.push('\n');
+        }
         (KeyCode::Enter, _) => {
-            if let Some(conversation) = &state.conversation.active_conversation {
+            if prompt_editable && let Some(conversation) = &state.conversation.active_conversation {
                 let content = prompt.trim().to_owned();
                 if !content.is_empty() {
                     state.generation = GenerationState::Preparing;
@@ -100,11 +122,28 @@ async fn handle_key(
                 }
             }
         }
-        (KeyCode::Backspace, _) => {
+        (KeyCode::Backspace, _) if prompt_editable => {
             prompt.pop();
         }
-        (KeyCode::Char(character), KeyModifiers::NONE | KeyModifiers::SHIFT) => {
+        (KeyCode::Char(character), KeyModifiers::NONE | KeyModifiers::SHIFT) if prompt_editable => {
             prompt.push(character);
+        }
+        (KeyCode::Tab, KeyModifiers::NONE) if prompt_editable => {
+            prompt.push('\t');
+        }
+        (KeyCode::BackTab, _) => {
+            state.ui.focused_panel = match state.ui.focused_panel {
+                Panel::Sidebar => Panel::Prompt,
+                Panel::Transcript => Panel::Sidebar,
+                Panel::Prompt => Panel::Transcript,
+                Panel::Status => Panel::Prompt,
+            };
+        }
+        (KeyCode::Esc, _) => {
+            state.ui.focused_panel = match state.ui.focused_panel {
+                Panel::Prompt => Panel::Transcript,
+                Panel::Transcript | Panel::Sidebar | Panel::Status => Panel::Prompt,
+            };
         }
         (KeyCode::Tab, _) => {
             state.ui.focused_panel = match state.ui.focused_panel {
@@ -119,6 +158,12 @@ async fn handle_key(
         }
         (KeyCode::PageDown, _) => {
             state.conversation.scroll_offset = state.conversation.scroll_offset.saturating_sub(3);
+        }
+        (KeyCode::Up, _) => {
+            state.conversation.scroll_offset = state.conversation.scroll_offset.saturating_add(1);
+        }
+        (KeyCode::Down, _) => {
+            state.conversation.scroll_offset = state.conversation.scroll_offset.saturating_sub(1);
         }
         _ => {}
     }
@@ -192,6 +237,14 @@ fn render(frame: &mut ratatui::Frame<'_>, state: &AppState, prompt: &str) {
             Style::default().add_modifier(Modifier::BOLD),
         )));
         transcript.push(Line::from(message.content.as_str()));
+        transcript.push(Line::from(""));
+    }
+    if let Some(streaming_response) = &state.conversation.streaming_response {
+        transcript.push(Line::from(Span::styled(
+            "Assistant:",
+            Style::default().add_modifier(Modifier::BOLD),
+        )));
+        transcript.push(Line::from(streaming_response.as_str()));
         transcript.push(Line::from(""));
     }
     if transcript.is_empty() {
