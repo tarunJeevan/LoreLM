@@ -573,6 +573,7 @@ dependencies = [
 name = "model-manager"
 version = "0.1.0"
 dependencies = [
+ "inference",
  "lorelm-core",
  "storage",
  "thiserror 1.0.69",

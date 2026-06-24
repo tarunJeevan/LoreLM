@@ -5,6 +5,7 @@ license.workspace = true
 version.workspace = true
 
 [dependencies]
+inference = { path = "../inference" }
 lorelm-core = { path = "../core" }
 storage = { path = "../storage" }
 thiserror.workspace = true

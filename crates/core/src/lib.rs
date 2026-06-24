@@ -106,6 +106,8 @@ pub struct ConversationState {
     pub active_conversation: Option<Conversation>,
     /// Visible messages. Cancelled messages are excluded by storage.
     pub messages: Vec<Message>,
+    /// In-progress assistant text assembled from token deltas.
+    pub streaming_response: Option<String>,
     /// Transcript scroll offset.
     pub scroll_offset: usize,
 }
