@@ -27,16 +27,16 @@
 ---
 
 ### Phase 1 — Minimal Local Inference
-- [ ] Apply optimizations and changes listed in `docs/phase-0-notes.md`
-- [ ] `InferenceBackend` trait and related types defined in `inference`
-- [ ] `ResourcePlanner` implemented (startup + load-time lifecycle)
-- [ ] Persistent inference worker thread implemented in `app`
+- [x] Apply optimizations and changes listed in `docs/phase-0-notes.md`
+- [x] `InferenceBackend` trait and related types defined in `inference`
+- [x] `ResourcePlanner` implemented (startup + load-time lifecycle)
+- [x] Persistent inference worker thread implemented in `app`
 - [ ] `llama-backend` implemented: non-streaming generation
 - [ ] Streaming generation: `TokenDelta` events to `app-tui`
 - [ ] `GenerationState` transitions implemented
 - [ ] Soft-delete cancellation implemented
-- [ ] Message persistence on `GenerationFinished`
-- [ ] Model path loaded from `config.toml`
+- [x] Message persistence on `GenerationFinished`
+- [x] Model path loaded from `config.toml`
 
 **Deliverable:** User can chat with one local GGUF model from the TUI with streaming output and cancellation. Full vertical slice complete.
 
