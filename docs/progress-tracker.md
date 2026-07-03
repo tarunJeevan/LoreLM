@@ -31,6 +31,7 @@
 - [x] `InferenceBackend` trait and related types defined in `inference`
 - [x] `ResourcePlanner` implemented (startup + load-time lifecycle)
 - [x] Persistent inference worker thread implemented in `app`
+- [ ] Analyze `docs/phase-1-notes.md` and apply recommended changes
 - [ ] `llama-backend` implemented: non-streaming generation
 - [ ] Streaming generation: `TokenDelta` events to `app-tui`
 - [ ] `GenerationState` transitions implemented
