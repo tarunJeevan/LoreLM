@@ -98,7 +98,12 @@ async fn handle_key(
             return Ok(true);
         }
         (KeyCode::Char('c'), KeyModifiers::CONTROL) => {
-            if matches!(state.generation, GenerationState::Generating) {
+            if matches!(
+                state.generation,
+                GenerationState::Preparing
+                    | GenerationState::Retrieving
+                    | GenerationState::Generating
+            ) {
                 state.generation = GenerationState::Cancelling;
                 let _ = command_tx.send(Command::CancelGeneration).await;
             }
@@ -131,7 +136,7 @@ async fn handle_key(
         (KeyCode::Tab, KeyModifiers::NONE) if prompt_editable => {
             prompt.push('\t');
         }
-        (KeyCode::BackTab, _) => {
+        (KeyCode::BackTab, _) if state.ui.focused_panel != Panel::Prompt => {
             state.ui.focused_panel = match state.ui.focused_panel {
                 Panel::Sidebar => Panel::Prompt,
                 Panel::Transcript => Panel::Sidebar,
@@ -145,7 +150,7 @@ async fn handle_key(
                 Panel::Transcript | Panel::Sidebar | Panel::Status => Panel::Prompt,
             };
         }
-        (KeyCode::Tab, _) => {
+        (KeyCode::Tab, _) if state.ui.focused_panel != Panel::Prompt => {
             state.ui.focused_panel = match state.ui.focused_panel {
                 Panel::Sidebar => Panel::Transcript,
                 Panel::Transcript => Panel::Prompt,
@@ -307,5 +312,86 @@ impl Drop for TerminalSession {
         let _ = disable_raw_mode();
         let _ = execute!(self.terminal.backend_mut(), LeaveAlternateScreen);
         let _ = self.terminal.show_cursor();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lorelm_core::{
+        Conversation, ConversationState, DocumentPanelState, ModeDefinition, ModelPanelState,
+        UiState, Workspace, WorkspaceId, WorkspaceState,
+    };
+
+    #[tokio::test]
+    async fn tab_in_prompt_inserts_tab_instead_of_cycling_focus() {
+        let mut state = test_state();
+        let (command_tx, _command_rx) = mpsc::channel(1);
+        let mut prompt = String::new();
+
+        handle_key(
+            KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
+            &mut prompt,
+            &mut state,
+            &command_tx,
+        )
+        .await
+        .expect("key handling succeeds");
+
+        assert_eq!(prompt, "\t");
+        assert_eq!(state.ui.focused_panel, Panel::Prompt);
+    }
+
+    #[tokio::test]
+    async fn backtab_in_prompt_does_not_cycle_focus() {
+        let mut state = test_state();
+        let (command_tx, _command_rx) = mpsc::channel(1);
+        let mut prompt = String::new();
+
+        handle_key(
+            KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT),
+            &mut prompt,
+            &mut state,
+            &command_tx,
+        )
+        .await
+        .expect("key handling succeeds");
+
+        assert_eq!(state.ui.focused_panel, Panel::Prompt);
+    }
+
+    fn test_state() -> AppState {
+        let workspace_id = WorkspaceId::new();
+        AppState {
+            workspace: WorkspaceState {
+                active_workspace: Some(Workspace {
+                    id: workspace_id,
+                    name: "default".to_owned(),
+                    root_path: None,
+                    created_at: String::new(),
+                    updated_at: String::new(),
+                }),
+            },
+            conversation: ConversationState {
+                active_conversation: Some(Conversation {
+                    id: lorelm_core::ConversationId::new(),
+                    workspace_id,
+                    parent_conversation_id: None,
+                    title: Some("main".to_owned()),
+                    active_mode_id: lorelm_core::ModeId::named("freeform"),
+                    created_at: String::new(),
+                    updated_at: String::new(),
+                }),
+                messages: Vec::new(),
+                streaming_response: None,
+                scroll_offset: 0,
+            },
+            documents: DocumentPanelState::default(),
+            models: ModelPanelState::default(),
+            generation: GenerationState::Idle,
+            active_mode: ModeDefinition::freeform(),
+            ui: UiState::default(),
+            available_ram_bytes: 0,
+        }
     }
 }
