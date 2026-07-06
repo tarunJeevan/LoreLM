@@ -5,12 +5,11 @@ mod paths;
 pub use paths::AppPaths;
 
 use lorelm_core::{
-    AppState, Conversation, ConversationId, ConversationState, DocumentPanelState, GenerationState,
-    Message, MessageRole, MessageStatus, ModeDefinition, ModeId, ModelId, ModelPanelState, UiState,
-    Workspace, WorkspaceId, WorkspaceState,
+    AppConfig, AppState, Conversation, ConversationId, ConversationState, DocumentPanelState,
+    GenerationState, Message, MessageId, MessageRole, MessageStatus, ModeDefinition, ModeId,
+    ModelId, ModelPanelState, UiState, Workspace, WorkspaceId, WorkspaceState,
 };
 use rusqlite::{Connection, OptionalExtension, params};
-use serde::{Deserialize, Serialize};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 /// Storage-layer error.
@@ -38,157 +37,6 @@ pub enum StorageError {
 
 /// Convenient result type for storage operations.
 pub type Result<T> = std::result::Result<T, StorageError>;
-
-/// Global application configuration loaded from `config.toml`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct AppConfig {
-    /// Configured model paths.
-    pub paths: PathConfig,
-    /// UI options.
-    pub ui: UiConfig,
-    /// Global inference runtime settings.
-    pub inference: InferenceConfig,
-    /// Retrieval defaults.
-    pub retrieval: RetrievalConfig,
-    /// Indexing defaults.
-    pub indexing: IndexingConfig,
-    /// Chunking defaults.
-    pub chunking: ChunkingConfig,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            paths: PathConfig {
-                model_dirs: vec!["~/.models".to_owned()],
-                model_path: None,
-            },
-            ui: UiConfig {
-                theme: "default".to_owned(),
-                show_sources_panel: true,
-            },
-            inference: InferenceConfig {
-                defaults: InferenceDefaults {
-                    context_size: 8192,
-                    threads: 8,
-                    batch_size: 512,
-                    ubatch_size: 128,
-                    use_mmap: true,
-                    use_mlock: false,
-                },
-            },
-            retrieval: RetrievalConfig {
-                strategy: "hybrid".to_owned(),
-                vector_top_k: 24,
-                fts_top_k: 24,
-                final_top_k: 8,
-                max_chunks_per_document: 3,
-                vector_weight: 0.7,
-                fts_weight: 0.3,
-                diversity_bonus: 0.05,
-                heading_match_bonus: 0.1,
-            },
-            indexing: IndexingConfig {
-                pause_during_generation: true,
-                max_parallel_embedding_batches: 1,
-            },
-            chunking: ChunkingConfig {
-                target_tokens: 500,
-                max_tokens: 800,
-                overlap_tokens: 80,
-                min_tokens: 80,
-            },
-        }
-    }
-}
-
-/// Path configuration.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PathConfig {
-    /// Directories scanned for models.
-    pub model_dirs: Vec<String>,
-    /// Optional Phase 1 model path used before model scanning exists.
-    #[serde(default)]
-    pub model_path: Option<String>,
-}
-
-/// UI configuration.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UiConfig {
-    /// Theme name.
-    pub theme: String,
-    /// Whether to show source panels.
-    pub show_sources_panel: bool,
-}
-
-/// Inference configuration wrapper.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InferenceConfig {
-    /// Global runtime defaults.
-    pub defaults: InferenceDefaults,
-}
-
-/// Global inference runtime defaults.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InferenceDefaults {
-    /// Context size.
-    pub context_size: usize,
-    /// Worker threads.
-    pub threads: usize,
-    /// Batch size.
-    pub batch_size: usize,
-    /// Micro-batch size.
-    pub ubatch_size: usize,
-    /// Whether to use mmap.
-    pub use_mmap: bool,
-    /// Whether to use mlock.
-    pub use_mlock: bool,
-}
-
-/// Retrieval configuration.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct RetrievalConfig {
-    /// Retrieval strategy.
-    pub strategy: String,
-    /// Vector candidate count.
-    pub vector_top_k: usize,
-    /// FTS candidate count.
-    pub fts_top_k: usize,
-    /// Final result count.
-    pub final_top_k: usize,
-    /// Per-document cap.
-    pub max_chunks_per_document: usize,
-    /// Vector score weight.
-    pub vector_weight: f32,
-    /// FTS score weight.
-    pub fts_weight: f32,
-    /// Diversity bonus.
-    pub diversity_bonus: f32,
-    /// Heading-match bonus.
-    pub heading_match_bonus: f32,
-}
-
-/// Indexing configuration.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IndexingConfig {
-    /// Whether indexing pauses during generation.
-    pub pause_during_generation: bool,
-    /// Maximum embedding batches.
-    pub max_parallel_embedding_batches: usize,
-}
-
-/// Chunking configuration.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ChunkingConfig {
-    /// Target chunk token estimate.
-    pub target_tokens: usize,
-    /// Maximum chunk token estimate.
-    pub max_tokens: usize,
-    /// Overlap token estimate.
-    pub overlap_tokens: usize,
-    /// Minimum chunk token estimate.
-    pub min_tokens: usize,
-}
 
 /// IDs created during database bootstrap.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -348,6 +196,26 @@ impl Storage {
         self.connection.execute(
             "UPDATE conversations SET updated_at = ?1 WHERE id = ?2",
             params![created_at, message.conversation_id.to_string()],
+        )?;
+        Ok(())
+    }
+
+    /// Updates one persisted message status.
+    pub fn update_message_status(
+        &self,
+        message_id: &MessageId,
+        status: MessageStatus,
+    ) -> Result<()> {
+        let updated_at = now()?;
+        self.connection.execute(
+            "UPDATE messages SET status = ?1 WHERE id = ?2",
+            params![status.as_str(), message_id.to_string()],
+        )?;
+        self.connection.execute(
+            "UPDATE conversations
+             SET updated_at = ?1
+             WHERE id = (SELECT conversation_id FROM messages WHERE id = ?2)",
+            params![updated_at, message_id.to_string()],
         )?;
         Ok(())
     }
@@ -672,6 +540,59 @@ mod tests {
         assert_eq!(state.conversation.messages.len(), 1);
         assert_eq!(state.conversation.messages[0].content, "hello");
         assert_eq!(state.conversation.messages[0].role, MessageRole::User);
+
+        std::fs::remove_dir_all(root).expect("test directory is removed");
+    }
+
+    #[test]
+    fn cancelled_messages_are_filtered_from_loaded_history() {
+        let root =
+            std::env::temp_dir().join(format!("lorelm-storage-test-{}", uuid::Uuid::new_v4()));
+        let paths = AppPaths::from_roots(
+            root.join("config"),
+            root.join("data"),
+            root.join("cache"),
+            root.join("state"),
+        );
+
+        let storage = Storage::open(&paths).expect("storage opens");
+        let config = storage.load_config().expect("config loads");
+        let bootstrap = storage.bootstrap().expect("bootstrap succeeds");
+        let cancelled = Message::new(
+            bootstrap.conversation_id,
+            0,
+            MessageRole::User,
+            "cancel me".to_owned(),
+            MessageStatus::Complete,
+        );
+        let complete = Message::new(
+            bootstrap.conversation_id,
+            1,
+            MessageRole::User,
+            "keep me".to_owned(),
+            MessageStatus::Complete,
+        );
+        storage
+            .insert_message(&cancelled)
+            .expect("cancelled message inserts");
+        storage
+            .insert_message(&complete)
+            .expect("complete message inserts");
+        storage
+            .update_message_status(&cancelled.id, MessageStatus::Cancelled)
+            .expect("message status updates");
+
+        let state = storage
+            .load_app_state(
+                &bootstrap.workspace_id,
+                &bootstrap.conversation_id,
+                config,
+                0,
+            )
+            .expect("state reloads");
+
+        assert_eq!(state.conversation.messages.len(), 1);
+        assert_eq!(state.conversation.messages[0].content, "keep me");
 
         std::fs::remove_dir_all(root).expect("test directory is removed");
     }

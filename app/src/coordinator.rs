@@ -5,11 +5,11 @@ use inference::{
     CancellationToken, GenerateRequest, GenerationEvent, InferenceBackend, ModelSpec, WorkerCommand,
 };
 use lorelm_core::{
-    AppError, AppEvent, Command, ConversationId, Message, MessageRole, MessageStatus,
-    ModeDefinition, ModelId, StopReason,
+    AppConfig, AppError, AppEvent, Command, ConversationId, Message, MessageId, MessageRole,
+    MessageStatus, ModeDefinition, ModelId, StopReason,
 };
 use model_manager::ResourcePlanner;
-use storage::{AppConfig, Storage};
+use storage::Storage;
 use tokio::sync::mpsc;
 
 pub struct Coordinator {
@@ -94,7 +94,6 @@ impl Coordinator {
                 if let Some(cancel) = &self.active_cancel {
                     cancel.cancel();
                 }
-                let _ = self.event_tx.blocking_send(AppEvent::GenerationCancelled);
             }
             Command::DismissError
             | Command::ScrollTranscript { .. }
@@ -134,6 +133,7 @@ impl Coordinator {
         self.storage
             .insert_message(&user_message)
             .context("failed to persist user message")?;
+        let user_message_id = user_message.id;
         let _ = self
             .event_tx
             .blocking_send(AppEvent::MessageAppended(user_message));
@@ -141,9 +141,11 @@ impl Coordinator {
         let cancel = CancellationToken::new();
         self.active_generation = Some(ActiveGeneration {
             conversation_id,
+            user_message_id,
             assistant_sequence: next_sequence + 1,
             mode_id: ModeDefinition::freeform().id,
             content: String::new(),
+            model_id: None,
         });
         self.active_cancel = Some(cancel.clone());
 
@@ -185,8 +187,7 @@ impl Coordinator {
             }
             GenerationEvent::Finished(summary) => {
                 if summary.stop_reason == StopReason::Cancelled {
-                    self.active_generation = None;
-                    self.active_cancel = None;
+                    self.cancel_active_generation(summary.model_id)?;
                     let _ = self.event_tx.blocking_send(AppEvent::GenerationCancelled);
                     return Ok(());
                 }
@@ -215,7 +216,7 @@ impl Coordinator {
                     .blocking_send(AppEvent::GenerationFinished(summary));
             }
             GenerationEvent::Cancelled => {
-                self.active_generation = None;
+                self.cancel_active_generation(None)?;
                 self.active_cancel = None;
                 let _ = self.event_tx.blocking_send(AppEvent::GenerationCancelled);
             }
@@ -264,6 +265,31 @@ impl Coordinator {
             sink: self.generation_tx.clone(),
         });
     }
+
+    fn cancel_active_generation(&mut self, model_id: Option<ModelId>) -> anyhow::Result<()> {
+        if let Some(active_generation) = self.active_generation.take() {
+            self.storage
+                .update_message_status(&active_generation.user_message_id, MessageStatus::Cancelled)
+                .context("failed to mark user message cancelled")?;
+
+            if !active_generation.content.is_empty() {
+                let mut assistant_message = Message::new(
+                    active_generation.conversation_id,
+                    active_generation.assistant_sequence,
+                    MessageRole::Assistant,
+                    active_generation.content,
+                    MessageStatus::Cancelled,
+                );
+                assistant_message.model_id = model_id.or(active_generation.model_id);
+                assistant_message.mode_id = Some(active_generation.mode_id);
+                self.storage
+                    .insert_message(&assistant_message)
+                    .context("failed to persist cancelled assistant message")?;
+            }
+        }
+        self.active_cancel = None;
+        Ok(())
+    }
 }
 
 impl Drop for Coordinator {
@@ -275,9 +301,11 @@ impl Drop for Coordinator {
 #[derive(Debug)]
 struct ActiveGeneration {
     conversation_id: ConversationId,
+    user_message_id: MessageId,
     assistant_sequence: i64,
     mode_id: lorelm_core::ModeId,
     content: String,
+    model_id: Option<ModelId>,
 }
 
 fn run_inference_worker(rx: std_mpsc::Receiver<WorkerCommand>) {

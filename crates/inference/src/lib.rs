@@ -1,17 +1,14 @@
 //! Backend-neutral inference API, worker commands, and generation protocol.
 
-use std::{
-    path::PathBuf,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-        mpsc,
-    },
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+    mpsc,
 };
 
 use lorelm_core::{ConversationId, GenerationConfig, ModeId, ModelId};
 
-pub use lorelm_core::{GenerationSummary, StopReason};
+pub use lorelm_core::{GenerationSummary, ModelSpec, RuntimeModelConfig, StopReason};
 
 /// Convenient result type for inference operations.
 pub type Result<T> = std::result::Result<T, InferenceError>;
@@ -28,36 +25,6 @@ pub enum InferenceError {
     /// Text generation failed.
     #[error("generation failed: {0}")]
     Generation(String),
-}
-
-/// Backend-neutral description of a model to load.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ModelSpec {
-    /// Stable model ID.
-    pub id: ModelId,
-    /// User-facing model name.
-    pub display_name: String,
-    /// Local GGUF path.
-    pub path: PathBuf,
-    /// File size in bytes, when known.
-    pub size_bytes: Option<u64>,
-}
-
-/// Runtime settings used to load and run a model.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RuntimeModelConfig {
-    /// Context window size.
-    pub context_size: usize,
-    /// CPU worker threads.
-    pub threads: usize,
-    /// Prompt batch size.
-    pub batch_size: usize,
-    /// Prompt micro-batch size.
-    pub ubatch_size: usize,
-    /// Whether to memory-map model weights.
-    pub use_mmap: bool,
-    /// Whether to lock model memory.
-    pub use_mlock: bool,
 }
 
 /// A single generation request.
