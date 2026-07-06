@@ -31,11 +31,11 @@
 - [x] `InferenceBackend` trait and related types defined in `inference`
 - [x] `ResourcePlanner` implemented (startup + load-time lifecycle)
 - [x] Persistent inference worker thread implemented in `app`
-- [ ] Analyze `docs/phase-1-notes.md` and apply recommended changes
-- [ ] `llama-backend` implemented: non-streaming generation
-- [ ] Streaming generation: `TokenDelta` events to `app-tui`
-- [ ] `GenerationState` transitions implemented
-- [ ] Soft-delete cancellation implemented
+- [x] Analyze `docs/phase-1-notes.md` and apply recommended changes
+- [x] `llama-backend` implemented: non-streaming generation
+- [x] Streaming generation: `TokenDelta` events to `app-tui`
+- [x] `GenerationState` transitions implemented
+- [x] Soft-delete cancellation implemented
 - [x] Message persistence on `GenerationFinished`
 - [x] Model path loaded from `config.toml`
 
@@ -135,7 +135,7 @@
 
 ## Architectural Decision Log
 
-No decisions recorded yet. This section will track decisions made during implementation that contradict or alter what was previously specified in the architecture, design, or implementation plan documents. Each entry should include:
+This section will track decisions made during implementation that contradict or alter what was previously specified in the architecture, design, or implementation plan documents. Each entry should include:
 
 - **Date**
 - **Decision:** What was decided
@@ -151,4 +151,4 @@ No decisions recorded yet. This section will track decisions made during impleme
 
 ---
 
-*Last updated: Phase 0 complete*
+*Last updated: Phase 1 complete*
