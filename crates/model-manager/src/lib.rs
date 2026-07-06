@@ -2,7 +2,7 @@
 
 use std::{fs, path::Path};
 
-use inference::{ModelSpec, RuntimeModelConfig};
+use lorelm_core::{ModelSpec, RuntimeModelConfig};
 
 /// Convenient result type for model management operations.
 pub type Result<T> = std::result::Result<T, ModelManagerError>;
