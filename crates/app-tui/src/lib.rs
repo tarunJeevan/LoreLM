@@ -107,10 +107,6 @@ async fn handle_key(
         return Ok(true);
     }
 
-    if is_alt_tab(key) {
-        return Ok(false);
-    }
-
     let prompt_editable = state.ui.focused_panel == Panel::Prompt
         && matches!(
             state.generation,
@@ -213,10 +209,6 @@ fn is_quit_key(key: KeyEvent) -> bool {
 fn is_plain_char(key: KeyEvent, expected: char) -> bool {
     matches!(key.code, KeyCode::Char(character) if character.eq_ignore_ascii_case(&expected))
         && key.modifiers.is_empty()
-}
-
-fn is_alt_tab(key: KeyEvent) -> bool {
-    matches!(key.code, KeyCode::Tab | KeyCode::BackTab) && key.modifiers.contains(KeyModifiers::ALT)
 }
 
 fn next_focus(panel: Panel) -> Panel {
