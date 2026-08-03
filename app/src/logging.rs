@@ -1,7 +1,7 @@
 use anyhow::Context;
 use storage::AppPaths;
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_subscriber::{fmt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt};
 
 pub fn init(paths: &AppPaths) -> anyhow::Result<WorkerGuard> {
     std::fs::create_dir_all(paths.state_dir()).context("failed to create state directory")?;

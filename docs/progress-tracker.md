@@ -27,18 +27,22 @@
 ---
 
 ### Phase 1 — Minimal Local Inference
-- [ ] Apply optimizations and changes listed in `docs/phase-0-notes.md`
-- [ ] `InferenceBackend` trait and related types defined in `inference`
-- [ ] `ResourcePlanner` implemented (startup + load-time lifecycle)
-- [ ] Persistent inference worker thread implemented in `app`
-- [ ] `llama-backend` implemented: non-streaming generation
-- [ ] Streaming generation: `TokenDelta` events to `app-tui`
-- [ ] `GenerationState` transitions implemented
-- [ ] Soft-delete cancellation implemented
-- [ ] Message persistence on `GenerationFinished`
-- [ ] Model path loaded from `config.toml`
+- [x] Apply optimizations and changes listed in `docs/phase-0-notes.md`
+- [x] `InferenceBackend` trait and related types defined in `inference`
+- [x] `ResourcePlanner` implemented (startup + load-time lifecycle)
+- [x] Persistent inference worker thread implemented in `app`
+- [x] Analyze `docs/phase-1-notes.md` and apply recommended changes
+- [x] `llama-backend` implemented: non-streaming generation
+- [x] Streaming generation: `TokenDelta` events to `app-tui`
+- [x] `GenerationState` transitions implemented
+- [x] Soft-delete cancellation implemented
+- [x] Message persistence on `GenerationFinished`
+- [x] Model path loaded from `config.toml`
 
 **Deliverable:** User can chat with one local GGUF model from the TUI with streaming output and cancellation. Full vertical slice complete.
+
+### Phase 1 Bug Fixes
+- [x] Address TUI input and focus issues from `docs/phase-1-notes.md`
 
 ---
 
@@ -134,7 +138,7 @@
 
 ## Architectural Decision Log
 
-No decisions recorded yet. This section will track decisions made during implementation that contradict or alter what was previously specified in the architecture, design, or implementation plan documents. Each entry should include:
+This section will track decisions made during implementation that contradict or alter what was previously specified in the architecture, design, or implementation plan documents. Each entry should include:
 
 - **Date**
 - **Decision:** What was decided
@@ -148,6 +152,48 @@ No decisions recorded yet. This section will track decisions made during impleme
 - **Replaces:** It introduces 1 or 2 warnings about certain values being dropped earlier or later due to the edition change.
 - **Reason:** There was no reason for sticking to the 2021 edition. Updating to the latest edition is more forward-facing as many third-party crates do the same, potentially introducing instabilities from dependencies.
 
+### Decision 2 - Phase 1 Scope Is Local GGUF Chat, Not Document Q&A
+
+- **Date:** 2026-07-05
+- **Decision:** Completed Phase 1 as a local GGUF chat loop with streaming and cancellation. Document import, chunking, FTS retrieval, citations, and document Q&A remain in Phases 2 and 3.
+- **Replaces:** The broader “First Vertical Slice” note in `docs/implementation-plan.md` that lists document import, chunking, FTS, and context prompt assembly by the end of Phase 1.
+- **Reason:** `docs/progress-tracker.md` already assigns document import to Phase 2 and document Q&A retrieval to Phase 3. Keeping Phase 1 focused avoids pulling later-phase scope forward before the local inference foundation is stable.
+
+### Decision 3 - Config and Runtime Planning Types Belong In `core`
+
+- **Date:** 2026-07-05
+- **Decision:** Moved shared config shape and backend-neutral model runtime types into `core`.
+- **Replaces:** The prior implementation where `storage` owned config structs and `model-manager` depended on `inference` for runtime planning types.
+- **Reason:** These are shared serializable/domain types, not persistence-only types. Moving them to `core` restores crate boundaries: `storage` handles I/O, `model-manager` handles planning, and `inference` handles worker/backend protocol.
+
+### Decision 4 - `llama-cpp-2` Is Pinned At `0.1.150`
+
+- **Date:** 2026-07-05
+- **Decision:** Added `llama-cpp-2 = "=0.1.150"` as the real local inference backend binding.
+- **Replaces:** The prior `llama-backend` stub that only checked model path existence and returned “generation is not implemented yet.”
+- **Reason:** Phase 1 requires actual local GGUF inference. Pinning the binding keeps a fast-moving llama.cpp API stable for this project.
+
+### Decision 5 - Create A Fresh Llama Context Per Generation
+
+- **Date:** 2026-07-05
+- **Decision:** `LlamaBackend` stores the initialized backend and loaded model, but creates a new `LlamaContext` for each generation request.
+- **Replaces:** No explicit documented behavior; this is an implementation choice within the `llama-backend` boundary.
+- **Reason:** `LlamaContext` borrows `LlamaModel`, so storing both in the same backend would require a self-referential structure. Creating a fresh context per request keeps ownership simple and safe for Phase 1.
+
+### Decision 6 - Streaming Deltas Are The Source Of Final Assistant Text
+
+- **Date:** 2026-07-05
+- **Decision:** The backend streams generated text through `GenerationEvent::TokenDelta`; the coordinator accumulates those deltas and persists the assistant message on `GenerationFinished`.
+- **Replaces:** No final-text event was added to `GenerationEvent`, and `GenerationSummary` remains metadata-only.
+- **Reason:** Phase 1 needs streaming output, and using token deltas as the single text path avoids duplicating assistant content in a second terminal event.
+
+### Decision 7 - Cancellation Is Acknowledged By The Worker Before UI Completion
+
+- **Date:** 2026-07-05
+- **Decision:** `CancelGeneration` signals the cancellation token but does not immediately emit `GenerationCancelled`; the coordinator waits for worker/backend acknowledgement before returning the TUI to `Idle`.
+- **Replaces:** The previous coordinator behavior that sent `GenerationCancelled` immediately after receiving the cancel command.
+- **Reason:** This keeps the UI state synchronized with actual inference state and gives the coordinator one place to mark persisted messages cancelled.
+
 ---
 
-*Last updated: Phase 0 complete*
+*Last updated: Phase 1 TUI bug-fix pass complete*

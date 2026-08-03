@@ -22,6 +22,7 @@ version = "0.1.0"
 anyhow = "1"
 crossterm = "0.28"
 directories = "5"
+llama-cpp-2 = "=0.1.150"
 ratatui = "0.29"
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
